@@ -49,3 +49,34 @@ app.post('/makeBoard', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+// --- Self-test call after server starts ---
+setTimeout(() => {
+  console.log("Running self-test for answer checker...");
+
+  fetch("http://localhost:3000/checkAnswer", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      question: "what was the first state to secede",
+      correct_answers: ["Kentucky"],
+      user_answer: "South Carolina",
+      mode: "interpretation",
+      options: {
+        ignore_case: true,
+        ignore_punctuation: true,
+        ignore_articles: true,
+        allow_minor_typos: true,
+        max_levenshtein_distance: 1
+      }
+    })
+  })
+    .then(res => res.text())
+    .then(text => {
+      console.log("Self-test response:");
+      console.log(text);
+    })
+    .catch(err => {
+      console.error("Self-test error:", err);
+    });
+
+}, 500); // slight delay so server is fully listening
