@@ -1,82 +1,103 @@
-require('dotenv').config();
-const express = require('express');
-const bodyParser = require('body-parser');
-const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+import express from 'express';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const app = express();
-app.use(bodyParser.json());
+app.use(express.json()); // parse JSON body
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const PORT = process.env.PORT || 3000;
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
+// ----------------------
 // Wake endpoint
+// ----------------------
 app.get('/wake', (req, res) => {
-  res.send({status: 'ok', message: 'Server is awake!'});
+  res.json({ status: 'ok', message: 'Server is awake!' });
 });
 
+// ----------------------
 // MakeBoard agent endpoint
-app.post('/makeBoard', async (req, res) => {
-  const inputJSON = req.body;
-
-  if (!inputJSON) {
-    return res.status(400).json({error: 'Missing input JSON'});
+// ----------------------
+app.post('/makeBoard', (req, res) => {
+  const input = req.body; // Expect quizzes JSON
+  if (!input || !input.quizzes) {
+    return res.status(400).json({ error: 'Missing quizzes in request body' });
   }
+
+  // Dummy implementation for testing
+  const board = {
+    categories: [
+      {
+        name: 'Sample Category',
+        clues: input.quizzes[0].questions.slice(0, 3),
+      },
+    ],
+    finalJeopardy: {
+      category: 'Final Category',
+      question: input.quizzes[0].questions[0].question,
+      answers: input.quizzes[0].questions[0].answers,
+    },
+  };
+
+  res.json(board);
+});
+
+// ----------------------
+// CheckAnswer agent endpoint
+// ----------------------
+app.post('/checkAnswer', (req, res) => {
+  const input = req.body;
+  if (!input || !input.question || !input.correct_answers || !input.user_answer) {
+    return res.status(400).json({ error: 'Invalid input JSON' });
+  }
+
+  // Simple normalization example
+  let normalizedUserAnswer = input.user_answer.toLowerCase().trim();
+  const normalizedCorrectAnswers = input.correct_answers.map(a => a.toLowerCase().trim());
+
+  const matchedAnswer = normalizedCorrectAnswers.includes(normalizedUserAnswer)
+    ? normalizedUserAnswer
+    : null;
+
+  const response = {
+    correct: matchedAnswer !== null,
+    score: matchedAnswer !== null ? 1 : 0,
+    matched_answer: matchedAnswer,
+    reason: matchedAnswer ? 'Exact match' : 'No match',
+    normalized_user_answer: normalizedUserAnswer,
+    normalized_correct_answers: normalizedCorrectAnswers,
+  };
+
+  res.json(response);
+});
+
+// ----------------------
+// Start server
+// ----------------------
+app.listen(PORT, async () => {
+  console.log(`Server running on port ${PORT}`);
+
+  // ----------------------
+  // Self-test for checkAnswer
+  // ----------------------
+  const testInput = {
+    question: 'Capital of France?',
+    correct_answers: ['Paris'],
+    user_answer: 'Paris',
+    mode: 'strict',
+    options: { ignore_case: true, ignore_punctuation: true, ignore_articles: false, allow_minor_typos: false, max_levenshtein_distance: 1 },
+  };
 
   try {
-    const response = await fetch('https://api.groq.ai/agents/makeBoard', {
+    const fetchResponse = await fetch(`http://localhost:${PORT}/checkAnswer`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROQ_API_KEY}`,
-      },
-      body: JSON.stringify({prompt: inputJSON})
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(testInput),
     });
-
-    if (!response.ok) {
-      const text = await response.text();
-      return res.status(response.status).json({error: text});
-    }
-
-    const data = await response.json();
-    res.json(data);
-
+    const data = await fetchResponse.json();
+    console.log('Self-test /checkAnswer result:', data);
   } catch (err) {
-    console.error('Error calling Groq agent:', err);
-    res.status(500).json({error: 'Internal server error'});
+    console.error('Self-test failed:', err);
   }
 });
-
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
-// --- Self-test call after server starts ---
-setTimeout(() => {
-  console.log("Running self-test for answer checker...");
-
-  fetch("http://localhost:3000/checkAnswer", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      question: "what was the first state to secede",
-      correct_answers: ["Kentucky"],
-      user_answer: "South Carolina",
-      mode: "interpretation",
-      options: {
-        ignore_case: true,
-        ignore_punctuation: true,
-        ignore_articles: true,
-        allow_minor_typos: true,
-        max_levenshtein_distance: 1
-      }
-    })
-  })
-    .then(res => res.text())
-    .then(text => {
-      console.log("Self-test response:");
-      console.log(text);
-    })
-    .catch(err => {
-      console.error("Self-test error:", err);
-    });
-
-}, 500); // slight delay so server is fully listening
