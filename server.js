@@ -1,50 +1,51 @@
-require('dotenv').config(); // <-- load .env variables
+require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
-const fetch = require('node-fetch');
+const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 
 const app = express();
 app.use(bodyParser.json());
 
-// --- CONFIG ---
-const GROQ_API_KEY = process.env.GROQ_API_KEY; // from .env
-const port = process.env.PORT || 3000;         // from .env or fallback
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const PORT = process.env.PORT || 3000;
 
-// --- /wake endpoint ---
+// Wake endpoint
 app.get('/wake', (req, res) => {
-  res.send('Server is awake!');
+  res.send({status: 'ok', message: 'Server is awake!'});
 });
 
-// --- /makeBoard endpoint ---
+// MakeBoard agent endpoint
 app.post('/makeBoard', async (req, res) => {
   const inputJSON = req.body;
 
   if (!inputJSON) {
-    return res.status(400).json({ error: 'Missing input JSON' });
+    return res.status(400).json({error: 'Missing input JSON'});
   }
 
   try {
-    const response = await fetch('https://api.groq.ai/v1/predict', {
+    const response = await fetch('https://api.groq.ai/agents/makeBoard', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROQ_API_KEY}`
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
       },
-      body: JSON.stringify({
-        model: 'grok-agent', // replace with your agent if needed
-        input: inputJSON
-      })
+      body: JSON.stringify({prompt: inputJSON})
     });
 
-    const result = await response.json();
-    res.json(result);
+    if (!response.ok) {
+      const text = await response.text();
+      return res.status(response.status).json({error: text});
+    }
+
+    const data = await response.json();
+    res.json(data);
+
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to process agent request' });
+    console.error('Error calling Groq agent:', err);
+    res.status(500).json({error: 'Internal server error'});
   }
 });
 
-// --- START SERVER ---
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
