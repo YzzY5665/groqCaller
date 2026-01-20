@@ -1,8 +1,10 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from "cors";
-
+import fs from "fs";
 dotenv.config();
+
+const CHECKER_PROMPT = JSON.parse(fs.readFileSync("./checkAnswer.json", "utf8")).prompt;
 
 const app = express();
 app.use(cors()); // allow all origins for testing
@@ -58,7 +60,7 @@ app.post('/checkAnswer', async (req, res) => {
       body: JSON.stringify({
         model: "llama3-70b-8192",
         messages: [
-          { role: "system", content: CHECKER_PROMPT },
+          { role: "system", content: CHECKER_PROMPT},
           { role: "user", content: JSON.stringify(payload) }
         ]
       })
