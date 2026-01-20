@@ -49,7 +49,6 @@ app.post('/checkAnswer', async (req, res) => {
   try {
     const payload = req.body;
 
-    // Forward to your correctness agent
     const groqRes = await fetch("https://api.groq.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -57,7 +56,7 @@ app.post('/checkAnswer', async (req, res) => {
         "Authorization": `Bearer ${GROQ_API_KEY}`
       },
       body: JSON.stringify({
-        model: "your-correctness-agent",
+        model: "llama3-70b-8192",
         messages: [
           { role: "system", content: CHECKER_PROMPT },
           { role: "user", content: JSON.stringify(payload) }
@@ -65,15 +64,20 @@ app.post('/checkAnswer', async (req, res) => {
       })
     });
 
+    if (!groqRes.ok) {
+      const text = await groqRes.text();
+      console.error("Groq error:", text);
+      return res.status(500).json({ error: "Groq call failed", details: text });
+    }
+
     const data = await groqRes.json();
 
-    // Extract the JSON the agent produced
     const parsed = JSON.parse(data.choices[0].message.content);
 
     res.json(parsed);
 
   } catch (err) {
-    console.error(err);
+    console.error("Server error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
