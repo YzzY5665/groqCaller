@@ -55,7 +55,7 @@ function loadPrompt(filename) {
 // Load prompts from /agents
 const CHECKER_PROMPT = loadPrompt("checkAnswer.json");
 const BOARD_PROMPT = loadPrompt("makeBoard.json");
-const RANKER_PROMPT = loadPrompt("rankAnswers.json");   // ⭐ NEW
+const RANKER_PROMPT = loadPrompt("rankAnswers.json");
 
 // Validate environment variables
 if (!process.env.GROQ_API_KEY) {
@@ -72,7 +72,53 @@ app.use(express.json());
 const PORT = process.env.PORT || 3000;
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
-// Shared Groq call helper with full debugging
+// ===============================
+// INPUT VALIDATORS (before AI call)
+// ===============================
+
+// /checkAnswer input validator
+function validateCheckAnswerInput(payload) {
+  return (
+    payload &&
+    typeof payload.question === "string" &&
+    Array.isArray(payload.correct_answers) &&
+    payload.correct_answers.every(a => typeof a === "string") &&
+    typeof payload.user_answer === "string" &&
+    typeof payload.mode === "string"
+  );
+}
+
+// /rankAnswers input validator
+function validateRankAnswersInput(payload) {
+  return (
+    payload &&
+    typeof payload.question === "string" &&
+    typeof payload.example_correct_answer === "string" &&
+    Array.isArray(payload.answers) &&
+    payload.answers.every(a => typeof a === "string")
+  );
+}
+
+// /makeBoard input validator
+function validateMakeBoardInput(payload) {
+  if (!payload || !Array.isArray(payload.quizzes)) return false;
+
+  return payload.quizzes.every(q =>
+    q &&
+    typeof q.title === "string" &&
+    Array.isArray(q.questions) &&
+    q.questions.every(qq =>
+      qq &&
+      typeof qq.question === "string" &&
+      Array.isArray(qq.answers) &&
+      qq.answers.every(a => typeof a === "string")
+    )
+  );
+}
+
+// ===============================
+// Shared Groq call helper
+// ===============================
 async function callGroq(prompt, payload) {
   debugLog("Calling Groq with payload:", payload);
 
@@ -122,20 +168,36 @@ async function callGroq(prompt, payload) {
   }
 }
 
+// ===============================
 // Wake endpoint
+// ===============================
 app.get("/wake", (req, res) => {
   res.json({ status: "ok", message: "Server is awake!" });
 });
 
-// MakeBoard endpoint (Groq-powered)
+// ===============================
+// MakeBoard endpoint
+// ===============================
 app.post("/makeBoard", async (req, res) => {
   try {
     const input = req.body;
 
     debugLog("Incoming /makeBoard payload:", input);
 
-    if (!input || !Array.isArray(input.quizzes) || input.quizzes.length === 0) {
-      return res.status(400).json({ error: "No quizzes provided" });
+    if (!validateMakeBoardInput(input)) {
+      return res.status(400).json({
+        error: "Invalid makeBoard payload format",
+        expected: {
+          quizzes: [
+            {
+              title: "string",
+              questions: [
+                { question: "string", answers: ["string"] }
+              ]
+            }
+          ]
+        }
+      });
     }
 
     const board = await callGroq(BOARD_PROMPT, input);
@@ -147,12 +209,26 @@ app.post("/makeBoard", async (req, res) => {
   }
 });
 
-// CheckAnswer endpoint (Groq-powered)
+// ===============================
+// CheckAnswer endpoint
+// ===============================
 app.post("/checkAnswer", async (req, res) => {
   try {
     const payload = req.body;
 
     debugLog("Incoming /checkAnswer payload:", payload);
+
+    if (!validateCheckAnswerInput(payload)) {
+      return res.status(400).json({
+        error: "Invalid checkAnswer payload format",
+        expected: {
+          question: "string",
+          correct_answers: ["string"],
+          user_answer: "string",
+          mode: "string"
+        }
+      });
+    }
 
     const result = await callGroq(CHECKER_PROMPT, payload);
 
@@ -163,20 +239,24 @@ app.post("/checkAnswer", async (req, res) => {
   }
 });
 
-// ⭐ NEW: RankAnswers endpoint
+// ===============================
+// RankAnswers endpoint
+// ===============================
 app.post("/rankAnswers", async (req, res) => {
   try {
     const payload = req.body;
 
     debugLog("Incoming /rankAnswers payload:", payload);
 
-    if (
-      !payload ||
-      typeof payload.question !== "string" ||
-      typeof payload.example_correct_answer !== "string" ||
-      !Array.isArray(payload.answers)
-    ) {
-      return res.status(400).json({ error: "Invalid payload format" });
+    if (!validateRankAnswersInput(payload)) {
+      return res.status(400).json({
+        error: "Invalid rankAnswers payload format",
+        expected: {
+          question: "string",
+          example_correct_answer: "string",
+          answers: ["string"]
+        }
+      });
     }
 
     const result = await callGroq(RANKER_PROMPT, payload);
@@ -188,6 +268,9 @@ app.post("/rankAnswers", async (req, res) => {
   }
 });
 
+// ===============================
+// Start server
+// ===============================
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
