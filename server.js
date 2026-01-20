@@ -82,7 +82,7 @@ async function callGroq(prompt, payload) {
       "Authorization": `Bearer ${GROQ_API_KEY}`
     },
     body: JSON.stringify({
-      model: "llama-3.1-70b-versatile",
+      model: "llama-3.3-70b-versatile",
       messages: [
         { role: "system", content: prompt },
         { role: "user", content: JSON.stringify(payload) }
