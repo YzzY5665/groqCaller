@@ -46,23 +46,36 @@ app.post('/makeBoard', async (req, res) => {
 
 // CheckAnswer endpoint (simplified test)
 app.post('/checkAnswer', async (req, res) => {
-  const { question, correct_answers, user_answer } = req.body;
-  if (!question || !correct_answers || !user_answer) {
-    return res.status(400).json({ error: 'Missing fields' });
+  try {
+    const payload = req.body;
+
+    // Forward to your correctness agent
+    const groqRes = await fetch("https://api.groq.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${GROQ_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: "your-correctness-agent",
+        messages: [
+          { role: "system", content: CHECKER_PROMPT },
+          { role: "user", content: JSON.stringify(payload) }
+        ]
+      })
+    });
+
+    const data = await groqRes.json();
+
+    // Extract the JSON the agent produced
+    const parsed = JSON.parse(data.choices[0].message.content);
+
+    res.json(parsed);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
   }
-
-  const normalizedUser = user_answer.trim().toLowerCase();
-  const normalizedCorrect = correct_answers.map(a => a.trim().toLowerCase());
-  const correct = normalizedCorrect.includes(normalizedUser);
-
-  res.json({
-    correct,
-    score: correct ? 1 : 0,
-    matched_answer: correct ? normalizedUser : null,
-    reason: correct ? 'Exact match' : 'Incorrect',
-    normalized_user_answer: normalizedUser,
-    normalized_correct_answers: normalizedCorrect
-  });
 });
 
 app.listen(PORT, () => {
