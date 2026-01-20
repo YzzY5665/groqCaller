@@ -75,7 +75,7 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY;
 async function callGroq(prompt, payload) {
   debugLog("Calling Groq with payload:", payload);
 
-  const res = await fetch("https://api.groq.com/v1/chat/completions", {
+  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
