@@ -55,6 +55,7 @@ function loadPrompt(filename) {
 // Load prompts from /agents
 const CHECKER_PROMPT = loadPrompt("checkAnswer.json");
 const BOARD_PROMPT = loadPrompt("makeBoard.json");
+const RANKER_PROMPT = loadPrompt("rankAnswers.json");   // ⭐ NEW
 
 // Validate environment variables
 if (!process.env.GROQ_API_KEY) {
@@ -158,6 +159,31 @@ app.post("/checkAnswer", async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error("❌ CheckAnswer error:", err);
+    res.status(500).json({ error: "Server error", details: err.message });
+  }
+});
+
+// ⭐ NEW: RankAnswers endpoint
+app.post("/rankAnswers", async (req, res) => {
+  try {
+    const payload = req.body;
+
+    debugLog("Incoming /rankAnswers payload:", payload);
+
+    if (
+      !payload ||
+      typeof payload.question !== "string" ||
+      typeof payload.example_correct_answer !== "string" ||
+      !Array.isArray(payload.answers)
+    ) {
+      return res.status(400).json({ error: "Invalid payload format" });
+    }
+
+    const result = await callGroq(RANKER_PROMPT, payload);
+
+    res.json({ status: "ok", result });
+  } catch (err) {
+    console.error("❌ RankAnswers error:", err);
     res.status(500).json({ error: "Server error", details: err.message });
   }
 });
